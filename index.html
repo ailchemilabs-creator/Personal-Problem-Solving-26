@@ -51,7 +51,38 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, Component } = React;
+
+    // --- Failsafe Error Boundary ---
+    class ErrorBoundary extends Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-200 p-8 font-sans">
+              <div className="max-w-xl w-full bg-slate-900 border border-slate-700 p-8 rounded-2xl shadow-2xl text-center">
+                <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <h2 className="text-2xl font-bold text-slate-100 mb-2">Workspace Conflict Detected</h2>
+                <p className="text-slate-400 mb-6">Your browser's saved data is incompatible with the latest app update. To restore the tool, please clear your local data.</p>
+                <button 
+                  onClick={() => { localStorage.removeItem('problemSolver_sessions'); localStorage.removeItem('problemSolver_folders'); window.location.reload(); }}
+                  className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium shadow-lg transition-colors"
+                >
+                  Clear Data & Reset Tool
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
 
     // --- UI Components ---
     const CheckIcon = ({ className }) => (
@@ -217,7 +248,83 @@
     const FileIcon = ({ className = "w-5 h-5" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>;
     const PlusIcon = () => <svg className="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>;
     const EditIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>;
+    const CopyIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>;
     const ListIcon = ({ className = "w-5 h-5" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>;
+    const HelpIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>;
+
+    // --- Tour Component ---
+    const TourOverlay = ({ active, stepIndex, steps, onClose, onNext, onPrev }) => {
+      const [rect, setRect] = useState(null);
+
+      useEffect(() => {
+        if (!active || !steps[stepIndex]?.target) {
+          setRect(null);
+          return;
+        }
+        const updateRect = () => {
+          const el = document.getElementById(steps[stepIndex].target);
+          if (el) setRect(el.getBoundingClientRect());
+        };
+        const timer = setTimeout(updateRect, 400); // Allow sidebar animations to finish
+        window.addEventListener('resize', updateRect);
+        return () => { clearTimeout(timer); window.removeEventListener('resize', updateRect); };
+      }, [active, stepIndex, steps]);
+
+      if (!active) return null;
+      const step = steps[stepIndex];
+      const isCenter = !step.target || !rect;
+
+      let tooltipStyle = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+      if (!isCenter) {
+         const spaceRight = window.innerWidth - rect.right;
+         const spaceBottom = window.innerHeight - rect.bottom;
+         
+         if (step.position === 'right' && spaceRight > 320) {
+           tooltipStyle = { top: rect.top, left: rect.right + 20 };
+         } else if (spaceBottom > 220) {
+           tooltipStyle = { top: rect.bottom + 20, left: Math.max(16, Math.min(rect.left, window.innerWidth - 340)) };
+         } else if (rect.top > 220) {
+           tooltipStyle = { bottom: window.innerHeight - rect.top + 20, left: Math.max(16, Math.min(rect.left, window.innerWidth - 340)) };
+         }
+      }
+
+      return (
+        <div className="fixed inset-0 z-[100] pointer-events-auto">
+          {isCenter ? (
+            <div className="absolute inset-0 bg-slate-950/80 transition-opacity animate-fade-in" onClick={onClose} />
+          ) : (
+            <div 
+              className="absolute transition-all duration-300 pointer-events-none rounded-xl ring-4 ring-blue-500"
+              style={{
+                 top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12,
+                 boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.85)'
+              }}
+            />
+          )}
+          
+          <div 
+            className="absolute bg-slate-800 border border-slate-700 shadow-[0_0_40px_rgba(0,0,0,0.5)] rounded-2xl p-6 w-[320px] transition-all duration-300 text-slate-100 z-[101]"
+            style={tooltipStyle}
+          >
+             <h3 className="text-xl font-bold text-blue-400 mb-2 flex items-center gap-2">
+                {step.title}
+             </h3>
+             <p className="text-slate-300 text-sm mb-6 leading-relaxed">{step.content}</p>
+             <div className="flex justify-between items-center">
+                <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-sm font-medium">Skip Tour</button>
+                <div className="flex gap-2">
+                   {stepIndex > 0 && <button className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-200 text-sm hover:bg-slate-600 transition-colors" onClick={onPrev}>Prev</button>}
+                   {stepIndex < steps.length - 1 ? (
+                     <button className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-500 transition-colors font-medium shadow-lg" onClick={onNext}>Next</button>
+                   ) : (
+                     <button className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm hover:bg-green-500 transition-colors font-medium shadow-lg" onClick={onClose}>Finish</button>
+                   )}
+                </div>
+             </div>
+          </div>
+        </div>
+      );
+    };
 
     // --- Todo Components ---
     const TodoInput = ({ onSubmit, placeholder, autoFocus }) => {
@@ -259,11 +366,12 @@
       const [showAddChild, setShowAddChild] = useState(false);
       const [expanded, setExpanded] = useState(true);
       const [dropPos, setDropPos] = useState(null);
+      const [copied, setCopied] = useState(false);
 
       const hasChildren = node.children && node.children.length > 0;
 
       return (
-        <div className="border-l-2 border-slate-700/50 pl-3 py-1 my-2">
+        <div className="border-l-2 border-slate-700/50 pl-4 py-2 my-2 transition-all">
           <div 
             draggable
             onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('todoId', node.id); }}
@@ -286,15 +394,15 @@
               }
               setDropPos(null);
             }}
-            className={`flex items-start gap-2 group p-1 -ml-1 rounded transition-all ${dropPos === 'before' ? 'shadow-[0_-2px_0_#3b82f6]' : dropPos === 'after' ? 'shadow-[0_2px_0_#3b82f6]' : dropPos === 'inside' ? 'bg-blue-900/30' : ''}`}
+            className={`flex items-start gap-3 group p-2 -ml-2 rounded-xl transition-all ${dropPos === 'before' ? 'shadow-[0_-2px_0_#3b82f6]' : dropPos === 'after' ? 'shadow-[0_2px_0_#3b82f6]' : dropPos === 'inside' ? 'bg-blue-900/30' : ''}`}
           >
-            <div className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Drag to move">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16"></path></svg>
+            <div className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 mt-1 opacity-20 group-hover:opacity-100 transition-opacity flex-shrink-0" title="Drag to move">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16"></path></svg>
             </div>
 
             <button 
               onClick={() => setExpanded(!expanded)} 
-              className={`mt-1.5 w-4 h-4 flex items-center justify-center flex-shrink-0 text-slate-500 hover:text-slate-300 ${!hasChildren && 'invisible'}`}
+              className={`mt-1 w-5 h-5 flex items-center justify-center flex-shrink-0 text-slate-500 hover:text-slate-300 ${!hasChildren && 'invisible'}`}
             >
               {expanded ? '▼' : '▶'}
             </button>
@@ -306,39 +414,71 @@
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
             </button>
 
-            <div className="flex-1 min-w-0 mt-0.5">
+            <div className="flex-1 min-w-0 flex flex-col">
               {isEditing ? (
-                <input 
+                <textarea 
                   autoFocus
-                  className="bg-slate-900 border border-blue-500 rounded px-2 py-1 w-full text-slate-200 outline-none"
+                  className="bg-slate-900 border border-blue-500 rounded-lg px-3 py-2 w-full text-slate-200 outline-none resize-y min-h-[80px]"
                   value={editValue}
                   onChange={e => setEditValue(e.target.value)}
                   onBlur={() => { onUpdate({ text: editValue }); setIsEditing(false); }}
-                  onKeyDown={e => { if (e.key === 'Enter') { onUpdate({ text: editValue }); setIsEditing(false); } }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onUpdate({ text: editValue }); setIsEditing(false); } }}
                 />
               ) : (
-                <div 
-                  className={`py-0.5 break-words cursor-pointer ${node.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}
-                  onDoubleClick={() => setIsEditing(true)}
-                >
+                <div className={`py-0.5 select-text cursor-text text-base whitespace-pre-wrap leading-relaxed ${node.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
                   {node.text}
                 </div>
               )}
-            </div>
-
-            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity text-slate-500 flex-shrink-0">
-              <button onClick={() => setShowAddChild(!showAddChild)} title="Add Subtask" className="p-1 hover:text-blue-400"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg></button>
-              <button onClick={() => setIsEditing(true)} title="Edit" className="p-1 hover:text-amber-400"><EditIcon /></button>
-              <button onClick={onMoveUp} title="Move Up" className="p-1 hover:text-slate-300">↑</button>
-              <button onClick={onMoveDown} title="Move Down" className="p-1 hover:text-slate-300">↓</button>
-              <button onClick={onDelete} title="Delete" className="p-1 hover:text-red-400">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
+              
+              <div className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 flex flex-wrap items-center gap-1.5 mt-2 transition-opacity text-slate-400 bg-slate-900/80 p-1.5 rounded-lg border border-slate-700/60 self-start">
+                <button onClick={async () => {
+                  try {
+                    let success = false;
+                    if (navigator.clipboard && window.isSecureContext) {
+                        try {
+                            await navigator.clipboard.writeText(node.text);
+                            success = true;
+                        } catch (err) {
+                            // Fallback if clipboard API is blocked by permissions
+                        }
+                    }
+                    if (!success) {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = node.text;
+                        textArea.style.position = "fixed";
+                        textArea.style.opacity = "0";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        document.execCommand("copy");
+                        textArea.remove();
+                    }
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  } catch (err) {
+                    console.error("Failed to copy", err);
+                  }
+                }} title="Copy Text" className="p-1.5 hover:text-green-400 hover:bg-slate-800 rounded transition-colors flex items-center gap-1">
+                   {copied ? (
+                     <React.Fragment>
+                       <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                       <span className="text-xs text-green-500 font-bold">Copied!</span>
+                     </React.Fragment>
+                   ) : <CopyIcon />}
+                </button>
+                <button onClick={() => setShowAddChild(!showAddChild)} title="Add Subtask" className="p-1.5 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg></button>
+                <button onClick={() => setIsEditing(true)} title="Edit" className="p-1.5 hover:text-amber-400 hover:bg-slate-800 rounded transition-colors"><EditIcon /></button>
+                <button onClick={onMoveUp} title="Move Up" className="p-1.5 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors">↑</button>
+                <button onClick={onMoveDown} title="Move Down" className="p-1.5 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors">↓</button>
+                <button onClick={onDelete} title="Delete" className="p-1.5 hover:text-red-400 hover:bg-slate-800 rounded transition-colors">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+              </div>
             </div>
           </div>
 
           {showAddChild && (
-            <div className="ml-8 mt-2 mb-3 max-w-md">
+            <div className="ml-10 mt-2 mb-4 max-w-xl">
               <TodoInput 
                 autoFocus
                 placeholder="New subtask..." 
@@ -348,7 +488,7 @@
           )}
 
           {expanded && hasChildren && (
-            <div className="ml-5 mt-1">
+            <div className="ml-6 mt-2 border-l border-slate-700/30 pl-2">
               {renderChildren(node.children)}
             </div>
           )}
@@ -528,22 +668,22 @@
       const [subStep, setSubStep] = useState(session.subStep || 0);
       const [isProblem, setIsProblem] = useState(session.isProblem !== undefined ? session.isProblem : null);
       
-      const [data, setData] = useState(session.data || {
-        typeOfSituation: null,
-        worthEnergy: null,
-        desiredState: [],
-        criticalThinking: {
-          why: [],
-          inherited: [],
-          inheritedFrom: [],
-          worstCase: [],
-          tradeOffs: []
-        },
-        currentState: [],
-        tension: [],
-        obstacles: [],
-        motive: { type: null, description: [] },
-        todos: []
+      // FIX: Deep merge existing session data with default structure to prevent crashes 
+      // when loading old local storage data that doesn't have the new fields yet.
+      const [data, setData] = useState(() => {
+        const defaultData = {
+          typeOfSituation: null, worthEnergy: null, desiredState: [],
+          criticalThinking: { why: [], inherited: [], inheritedFrom: [], worstCase: [], tradeOffs: [] },
+          currentState: [], tension: [], obstacles: [],
+          motive: { type: null, description: [] }, todos: []
+        };
+        const saved = session.data || {};
+        return {
+          ...defaultData, ...saved,
+          criticalThinking: { ...defaultData.criticalThinking, ...(saved.criticalThinking || {}) },
+          motive: { ...defaultData.motive, ...(saved.motive || {}) },
+          todos: saved.todos || []
+        };
       });
 
       const updateMotive = (field, value) => {
@@ -1105,7 +1245,7 @@
           </div>
           
           {activeTab === 'todos' ? (
-            <Card theme="neutral">
+            <Card theme="neutral" className="max-w-5xl">
                <h2 className="text-3xl font-bold text-slate-100 mb-6">Action Plan</h2>
                <p className="text-slate-400 mb-8">Break down your solution into manageable, recursive tasks.</p>
                <TodoTree 
@@ -1142,9 +1282,32 @@
       const [sidebarOpen, setSidebarOpen] = useState(false);
       const [editingItem, setEditingItem] = useState({ id: null, type: null, tempName: '' });
 
+      // Tutorial State
+      const [isTourActive, setIsTourActive] = useState(false);
+      const [tourStep, setTourStep] = useState(0);
+
+      const TOUR_STEPS = [
+        { target: null, title: "Welcome to Problem Solver", content: "This tool helps you deconstruct problems, apply critical thinking, and build actionable plans. Let's take a quick tour!" },
+        { target: "tour-sidebar-toggle", title: "Sidebar Menu", content: "Toggle the sidebar to access your history, folders, and create new problem-solving sessions.", position: "bottom" },
+        { target: "tour-new-problem", title: "Start a Session", content: "Click here to start a brand new problem-solving process.", position: "right", requiresSidebar: true },
+        { target: "tour-new-folder", title: "Organize with Folders", content: "Keep your workspace tidy by creating folders to group related problems together.", position: "right", requiresSidebar: true },
+        { target: "tour-segments", title: "Control Segments", content: "Drag and drop your folders and problems into these segments based on whether they are within your control, influence, or completely out of your control.", position: "right", requiresSidebar: true },
+        { target: "tour-home-btn", title: "Home Dashboard", content: "Click the Home icon anytime to return to the main dashboard and see a high-level summary.", position: "bottom" }
+      ];
+
       useEffect(() => {
-        localStorage.setItem('problemSolver_sessions', JSON.stringify(sessions));
-      }, [sessions]);
+        const hasSeenTour = localStorage.getItem('problemSolver_hasSeenTour');
+        if (!hasSeenTour) {
+          setTimeout(() => setIsTourActive(true), 500);
+          localStorage.setItem('problemSolver_hasSeenTour', 'true');
+        }
+      }, []);
+
+      useEffect(() => {
+        if (isTourActive && TOUR_STEPS[tourStep]?.requiresSidebar && !sidebarOpen) {
+          setSidebarOpen(true);
+        }
+      }, [isTourActive, tourStep]);
 
       useEffect(() => {
         localStorage.setItem('problemSolver_folders', JSON.stringify(folders));
@@ -1205,7 +1368,7 @@
 
       const handleDropOnFolder = (e, folderId) => {
         e.preventDefault();
-        e.stopPropagation(); // Prevent the segment drop event from firing
+        e.stopPropagation();
         const dragType = e.dataTransfer.getData('dragType');
         const dragId = e.dataTransfer.getData('dragId');
         
@@ -1285,20 +1448,28 @@
 
       return (
         <div className="flex h-screen bg-slate-950 font-sans text-slate-100 overflow-hidden">
+          <TourOverlay 
+            active={isTourActive} 
+            stepIndex={tourStep} 
+            steps={TOUR_STEPS} 
+            onClose={() => setIsTourActive(false)} 
+            onNext={() => setTourStep(s => s + 1)} 
+            onPrev={() => setTourStep(s => s - 1)} 
+          />
           
           {/* Sidebar */}
           <div className={`flex-shrink-0 bg-slate-900 transition-[width] duration-300 ease-in-out overflow-hidden border-r border-slate-800 ${sidebarOpen ? 'w-80' : 'w-0 border-none'}`}>
             <div className="w-80 flex flex-col h-full flex-shrink-0">
               <div className="p-4 w-full flex-shrink-0 border-b border-slate-800 bg-slate-900/50">
-                <Button theme="blue" onClick={createNewProblem} className="mb-3 w-full justify-start py-2.5">
+                <Button theme="blue" onClick={createNewProblem} id="tour-new-problem" className="mb-3 w-full justify-start py-2.5">
                   <PlusIcon /> New Problem
                 </Button>
-                <Button variant="secondary" theme="neutral" onClick={createNewFolder} className="w-full justify-start py-2.5 border-dashed border-slate-700 text-slate-400 hover:text-slate-300">
+                <Button variant="secondary" theme="neutral" onClick={createNewFolder} id="tour-new-folder" className="w-full justify-start py-2.5 border-dashed border-slate-700 text-slate-400 hover:text-slate-300">
                   <FolderIcon className="w-5 h-5 mr-2 -ml-1" /> New Folder
                 </Button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar" id="tour-segments">
                 {SEGMENTS.map(segment => (
                   <div 
                     key={segment.id}
@@ -1364,8 +1535,9 @@
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 relative bg-slate-950 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-10">
-            <header className="flex-shrink-0 p-4 flex gap-2 border-b border-slate-800/50 bg-slate-900/20">
+            <header className="flex-shrink-0 p-4 flex items-center gap-2 border-b border-slate-800/50 bg-slate-900/20">
               <button 
+                id="tour-sidebar-toggle"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-white shadow-sm transition-colors"
                 title="Toggle Sidebar"
@@ -1373,11 +1545,20 @@
                 <MenuIcon />
               </button>
               <button 
+                id="tour-home-btn"
                 onClick={() => setActiveId(null)}
                 className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-white shadow-sm transition-colors"
                 title="Go to Home"
               >
                 <HomeIcon />
+              </button>
+              
+              <button 
+                onClick={() => { setIsTourActive(true); setTourStep(0); }}
+                className="p-2 ml-auto bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-blue-400 shadow-sm transition-colors flex items-center gap-2 text-sm font-medium"
+                title="Start Tutorial Tour"
+              >
+                <HelpIcon /> <span className="hidden sm:inline">Tour</span>
               </button>
             </header>
 
@@ -1409,14 +1590,17 @@
               )}
             </main>
           </div>
-
         </div>
       );
     }
 
-    // Initialize React on the root div
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<WorkspaceApp />);
+    // Wrap application in ErrorBoundary to prevent white screens forever
+    root.render(
+      <ErrorBoundary>
+        <WorkspaceApp />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
