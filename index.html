@@ -1121,12 +1121,34 @@
     }
 
     function WorkspaceApp() {
-      const [sessions, setSessions] = useState([]);
-      const [folders, setFolders] = useState([]);
+      const [sessions, setSessions] = useState(() => {
+        try {
+          const saved = localStorage.getItem('problemSolver_sessions');
+          return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          return [];
+        }
+      });
+      const [folders, setFolders] = useState(() => {
+        try {
+          const saved = localStorage.getItem('problemSolver_folders');
+          return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+          return [];
+        }
+      });
       const [activeId, setActiveId] = useState(null);
       const [activeSessionTab, setActiveSessionTab] = useState('analysis');
       const [sidebarOpen, setSidebarOpen] = useState(false);
       const [editingItem, setEditingItem] = useState({ id: null, type: null, tempName: '' });
+
+      useEffect(() => {
+        localStorage.setItem('problemSolver_sessions', JSON.stringify(sessions));
+      }, [sessions]);
+
+      useEffect(() => {
+        localStorage.setItem('problemSolver_folders', JSON.stringify(folders));
+      }, [folders]);
 
       const SEGMENTS = [
         { id: 'none', label: 'Uncategorized', color: 'text-slate-400', bg: 'bg-transparent', border: 'border-transparent' },
