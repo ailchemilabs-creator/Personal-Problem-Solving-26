@@ -3,7 +3,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Advanced Viewport settings for perfect Android/iOS full-screen adaptation -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -30,7 +29,7 @@
     }
 
     /* Custom Scrollbar */
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
@@ -344,11 +343,10 @@
     // --- Main Application ---
     function ProblemSession({ session, onUpdateSession, onNewSession, activeTab, onTabChange }) {
       
-      // Directly pull variables from the upstream prop to guarantee perfectly synced states
       const defaultData = {
         typeOfSituation: null, worthEnergy: null, desiredState: [],
         criticalThinking: { why: [], inherited: [], inheritedFrom: [], worstCase: [], tradeOffs: [] },
-        currentState: [], tension: [], obstacles: [],
+        currentState: [], tension: [], gap: { differences: [], missing: [] }, obstacles: [],
         motive: { type: null, description: [] }, todos: []
       };
       
@@ -356,6 +354,7 @@
         ...defaultData, ...(session.data || {}),
         criticalThinking: { ...defaultData.criticalThinking, ...(session.data?.criticalThinking || {}) },
         motive: { ...defaultData.motive, ...(session.data?.motive || {}) },
+        gap: { ...defaultData.gap, ...(session.data?.gap || {}) },
         todos: session.data?.todos || []
       };
       
@@ -363,10 +362,10 @@
       const subStep = session.subStep || 0;
       const isProblem = session.isProblem !== undefined ? session.isProblem : null;
 
-      // Updating functions immediately pass up to WorkspaceApp to save in localStorage instantly
       const updateData = (field, value) => onUpdateSession(session.id, { data: { ...data, [field]: value } });
       const updateMotive = (field, value) => updateData('motive', { ...data.motive, [field]: value });
       const updateCritical = (field, value) => updateData('criticalThinking', { ...data.criticalThinking, [field]: value });
+      const updateGap = (field, value) => updateData('gap', { ...data.gap, [field]: value });
       const setStep = (val) => onUpdateSession(session.id, { step: val, subStep: 0 });
       const setSubStep = (val) => onUpdateSession(session.id, { subStep: val });
       const setIsProblem = (val) => onUpdateSession(session.id, { isProblem: val });
@@ -381,7 +380,7 @@
 
       const renderStep = () => {
         switch (step) {
-          case 0:
+          case 0: // Reality Check
             return (
               <Card theme="neutral" className="text-center py-16">
                 <h1 className="text-4xl font-bold text-slate-100 mb-8">Reality Check</h1>
@@ -438,7 +437,7 @@
               </Card>
             );
 
-          case 1:
+          case 1: // Desired State
             return (
               <Card theme="blue">
                 <div className="flex items-center gap-2 mb-4"><span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Problem Solving</span></div>
@@ -459,7 +458,7 @@
               </Card>
             );
 
-          case 2:
+          case 2: // Critical Thinking
             return (
               <Card theme="gold">
                 <div className="flex items-center gap-2 mb-4"><span className="bg-amber-900/50 text-amber-400 border border-amber-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Critical Thinking</span></div>
@@ -476,7 +475,7 @@
               </Card>
             );
 
-          case 3:
+          case 3: // Current State
             return (
               <Card theme="blue">
                 <div className="flex items-center gap-2 mb-4"><span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Problem Solving</span></div>
@@ -500,13 +499,70 @@
                 {subStep >= 3 && (
                   <div className="flex justify-between items-center pt-6 mt-8 border-t border-slate-800 animate-fade-in">
                     <Button variant="secondary" theme="blue" onClick={() => setStep(1)}>Back</Button>
-                    <Button theme="blue" onClick={() => setStep(4)}>Continue to Obstacles <ArrowRight /></Button>
+                    <Button theme="blue" onClick={() => setStep(4)}>Continue to The Gap <ArrowRight /></Button>
                   </div>
                 )}
               </Card>
             );
 
-          case 4:
+          case 4: // The Gap (NEW)
+            return (
+              <Card theme="blue">
+                <div className="flex items-center gap-2 mb-4"><span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Problem Solving</span></div>
+                <h2 className="text-3xl font-bold text-slate-100 mb-6">The Gap</h2>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="bg-blue-950/30 p-4 rounded-xl border border-blue-900/50 shadow-sm">
+                    <h3 className="text-sm font-bold text-blue-400 uppercase tracking-wider mb-2">Desired State</h3>
+                    <div className="text-slate-200 text-sm">{renderList(data.desiredState)}</div>
+                  </div>
+                  <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Current State</h3>
+                    <div className="text-slate-200 text-sm">{renderList(data.currentState)}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <QuestionBox theme="blue" interactive checked={true}>
+                    What is the gap between the two?
+                  </QuestionBox>
+                </div>
+
+                <div className="animate-fade-in space-y-8">
+                  <BulletInput 
+                    theme="blue"
+                    label="1.) What's different between the two?"
+                    placeholder="Note the differences..."
+                    value={data.gap.differences}
+                    onChange={(val) => updateGap('differences', val)}
+                  />
+                  
+                  <BulletInput 
+                    theme="blue"
+                    label="2.) What's missing from the current state relative to your desired state?"
+                    placeholder="List what is missing..."
+                    value={data.gap.missing}
+                    onChange={(val) => updateGap('missing', val)}
+                  />
+
+                  {(data.gap.differences.length > 0 || data.gap.missing.length > 0) && (
+                    <div className="bg-slate-800/80 p-6 rounded-xl border border-slate-700 mt-6 shadow-inner animate-fade-in">
+                      <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Synthesized Gap</h3>
+                      <p className="text-slate-200 text-lg leading-relaxed">
+                        This is the gap: <strong className="text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded">[{fmt([...data.gap.differences, ...data.gap.missing])}]</strong>
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-6 mt-8 border-t border-slate-800">
+                    <Button variant="secondary" theme="blue" onClick={() => setStep(3)}>Back</Button>
+                    <Button theme="blue" onClick={() => setStep(5)}>Continue to Obstacles <ArrowRight /></Button>
+                  </div>
+                </div>
+              </Card>
+            );
+
+          case 5: // Obstacles
             return (
               <Card theme="blue">
                 <div className="flex items-center gap-2 mb-4"><span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Problem Solving</span></div>
@@ -519,15 +575,15 @@
                   <div className="animate-fade-in">
                     <BulletInput theme="blue" placeholder="List the blockers, challenges, and missing resources..." value={data.obstacles} onChange={(val) => updateData('obstacles', val)} />
                     <div className="flex justify-between items-center pt-6 mt-8 border-t border-slate-800">
-                      <Button variant="secondary" theme="blue" onClick={() => setStep(3)}>Back</Button>
-                      <Button theme="blue" onClick={() => setStep(5)}>Continue to Motive <ArrowRight /></Button>
+                      <Button variant="secondary" theme="blue" onClick={() => setStep(4)}>Back</Button>
+                      <Button theme="blue" onClick={() => setStep(6)}>Continue to Motive <ArrowRight /></Button>
                     </div>
                   </div>
                 )}
               </Card>
             );
 
-          case 5:
+          case 6: // Motive
             return (
               <Card theme={data.motive?.type === 'push' ? 'red' : data.motive?.type === 'pull' ? 'neutral' : 'blue'} className={data.motive?.type === 'pull' ? 'border-green-900/40 bg-slate-900' : ''}>
                 <div className="flex items-center gap-2 mb-4"><span className="bg-blue-900/50 text-blue-400 border border-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">Problem Solving</span></div>
@@ -547,14 +603,14 @@
                 {data.motive?.type === 'push' && <div className="animate-fade-in mb-8"><BulletInput theme="red" label="Why do you want to leave the current state, and what happens down the line if nothing changes?" placeholder="Describe what you are avoiding and the consequences of inaction..." value={data.motive.description || []} onChange={(val) => updateMotive('description', val)} /></div>}
                 {data.motive?.type && (
                   <div className="flex justify-between items-center pt-6 mt-8 border-t border-slate-800 animate-fade-in">
-                    <Button variant="secondary" theme="blue" onClick={() => setStep(4)}>Back</Button>
-                    <Button theme="blue" onClick={() => setStep(6)}>Generate Dashboard <ArrowRight /></Button>
+                    <Button variant="secondary" theme="blue" onClick={() => setStep(5)}>Back</Button>
+                    <Button theme="blue" onClick={() => setStep(7)}>Generate Dashboard <ArrowRight /></Button>
                   </div>
                 )}
               </Card>
             );
 
-          case 6:
+          case 7: // Dashboard
             return (
               <Card theme="neutral" className="bg-slate-900 border-slate-800">
                 <h2 className="text-3xl font-bold text-slate-100 mb-6 border-b border-slate-800 pb-4">Problem Summary Dashboard</h2>
@@ -567,9 +623,11 @@
                   )}
                   <div className="bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-700 text-lg leading-relaxed text-slate-300">
                     The gap I'm perceiving is between this desired state <strong className="text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded">[{fmt(data.desiredState)}]</strong> 
-                    &nbsp;and this current state <strong className="text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded">[{fmt(data.currentState)}]</strong>, 
+                    &nbsp;and this current state <strong className="text-blue-400 bg-blue-950/50 border border-blue-900/50 px-2 py-1 rounded">[{fmt(data.currentState)}]</strong>.
+                    <br/><br/>
+                    This means the gap is: <strong className="text-cyan-400 bg-cyan-950/50 border border-cyan-900/50 px-2 py-1 rounded">[{fmt([...data.gap.differences, ...data.gap.missing])}]</strong>,
                     which is creating because of this obstacle <strong className="text-red-400 bg-red-950/50 border border-red-900/50 px-2 py-1 rounded">[{fmt(data.obstacles)}]</strong>,
-                    which is creating this type of tension: <strong className="text-amber-400 bg-amber-950/50 border border-amber-900/50 px-2 py-1 rounded">[{fmt(data.tension)}]</strong>.
+                    creating this type of tension: <strong className="text-amber-400 bg-amber-950/50 border border-amber-900/50 px-2 py-1 rounded">[{fmt(data.tension)}]</strong>.
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-sm"><h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Desired State</h3><div className="text-slate-200 font-medium">{renderList(data.desiredState)}</div></div>
@@ -610,6 +668,36 @@
             <button className={`px-6 py-3 font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'todos' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`} onClick={() => onTabChange('todos')}><ListIcon className="w-5 h-5" /> Action Plan</button>
           </div>
           
+          {activeTab === 'analysis' && (
+            <div className="w-full max-w-3xl mx-auto mb-6 px-2 animate-fade-in">
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {[
+                  { id: 0, label: "1. Reality" },
+                  { id: 1, label: "2. Desired" },
+                  { id: 2, label: "Deep Dive", hidden: !data.criticalThinking.why?.length && step !== 2 },
+                  { id: 3, label: "3. Current" },
+                  { id: 4, label: "4. Gap" },
+                  { id: 5, label: "5. Obstacles" },
+                  { id: 6, label: "6. Motive" },
+                  { id: 7, label: "7. Summary" }
+                ].filter(s => !s.hidden).map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => setStep(s.id)}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                      step === s.id 
+                        ? (s.id === 2 ? 'bg-amber-600 border-amber-500 text-white shadow-md' : 'bg-blue-600 border-blue-500 text-white shadow-md')
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                    title={`Jump to ${s.label}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {activeTab === 'todos' ? (
             <Card theme="neutral" className="max-w-5xl">
                <h2 className="text-3xl font-bold text-slate-100 mb-6">Action Plan</h2>
@@ -664,7 +752,7 @@
         const newSession = {
           id: Math.random().toString(36).substring(2, 9), title: 'New Problem ' + (sessions.length + 1),
           folderId: null, segment: 'none', step: 0, subStep: 0, isProblem: null,
-          data: { typeOfSituation: null, worthEnergy: null, desiredState: [], criticalThinking: { why: [], inherited: [], inheritedFrom: [], worstCase: [], tradeOffs: [] }, currentState: [], tension: [], obstacles: [], motive: { type: null, description: [] }, todos: [] }
+          data: { typeOfSituation: null, worthEnergy: null, desiredState: [], criticalThinking: { why: [], inherited: [], inheritedFrom: [], worstCase: [], tradeOffs: [] }, currentState: [], gap: { differences: [], missing: [] }, tension: [], obstacles: [], motive: { type: null, description: [] }, todos: [] }
         };
         setSessions([newSession, ...sessions]);
         setActiveId(newSession.id);
